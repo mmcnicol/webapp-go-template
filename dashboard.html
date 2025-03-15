@@ -1,0 +1,14 @@
+{{define "content"}}
+  {{if .PatientName}}
+    {{template "patient_banner" .}}
+  {{end}}
+  {{if .RecentPatients}}
+    {{template "recent_patients" .}}
+  {{end}}
+  {{if .Documents}}
+    {{template "documents" .}}
+  {{end}}
+  {{if .LabResults}}
+    {{template "lab_results" .}}
+  {{end}}
+{{end}}

@@ -1,2 +1,7 @@
-# webapp-go-template
-a golang web application using nested templates
+# webapp
+
+--- learning
+
+https://developer.hashicorp.com/nomad/tutorials/templates/go-template-syntax
+
+

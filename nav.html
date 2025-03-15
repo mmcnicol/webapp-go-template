@@ -1,0 +1,10 @@
+{{define "nav"}}
+<div class="nav">
+    <h2>Navigation</h2>
+    <ul>
+        {{range .Navigation}}
+            <li><a href="{{.Endpoint}}">{{.Page}}</a></li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
