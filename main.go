@@ -29,8 +29,8 @@ type PageData struct {
         Username        string
         Navigation   []Navigation
         SearchResults   []string
-        PatientName     string
-        RecentPatients  []string
+        GopherName     string
+        RecentGophers  []string
         Documents      []string
         LabResults      []string
 }
@@ -153,11 +153,11 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
                 LoggedIn:       true,
                 Username:       claims.Username,
                 Navigation:    getNavigation(false),
-                RecentPatients:	[]string{"Patient A", "Patient B", "Patient C"}, // Simulated results
+                RecentGophers:	[]string{"Gopher A", "Gopher B", "Gopher C"}, // Simulated results
                 Documents: []string{},
                 LabResults:    []string{},
         }
-        tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "patient_banner.html", "recent_patients.html", "documents.html", "lab_results.html")
+        tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
         if err != nil {
         	fmt.Println("template parsing error:", err)
         	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -183,12 +183,12 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
                 LoggedIn:       true,
                 Username:       claims.Username,
                 Navigation:    getNavigation(true),
-                PatientName:   "placeholder",
-                RecentPatients: []string{},
+                GopherName:   "placeholder",
+                RecentGophers: []string{},
                 Documents:    []string{"Document 1", "Document 2", "Document 3"},
                 LabResults: []string{},
         }
-        tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "patient_banner.html", "recent_patients.html", "documents.html", "lab_results.html")
+        tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
         if err != nil {
         	fmt.Println("template parsing error:", err)
         	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -214,12 +214,12 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
                 LoggedIn:       true,
                 Username:       claims.Username,
                 Navigation:    getNavigation(true),
-                PatientName:   "placeholder",
-                RecentPatients: []string{},
+                GopherName:   "placeholder",
+                RecentGophers: []string{},
                 Documents: []string{},
                 LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
         }
-        tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "patient_banner.html", "recent_patients.html", "documents.html", "lab_results.html")
+        tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
         if err != nil {
         	fmt.Println("template parsing error:", err)
         	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -243,17 +243,17 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
         
         if r.Method == http.MethodPost {
                 query := r.FormValue("query")
-                //searchResults := []string{"Patient A", "Patient B", "Patient C"} // Simulated results
+                //searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
                 data := PageData{
                         LoggedIn:      true,
                         Username:       claims.Username,
                         Navigation:    getNavigation(true),
-                        PatientName:   query,
-                        RecentPatients:    []string{},
+                        GopherName:   query,
+                        RecentGophers:    []string{},
                         Documents:    []string{},
                         LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
                 }
-                tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "patient_banner.html", "recent_patients.html", "documents.html", "lab_results.html")
+                tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
         	if err != nil {
        		 	fmt.Println("template parsing error:", err)
         		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
