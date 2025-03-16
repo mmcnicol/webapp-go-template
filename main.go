@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
         "fmt"
+        "html"
         "html/template"
         "net/http"
+        "strings"
         "time"
         
         "github.com/golang-jwt/jwt/v5"
@@ -94,6 +96,19 @@ func verifyToken(r *http.Request) (*Claims, error) {
 	return claims, nil
 }
 
+func sanitizeUserInput(input string) string {
+
+	sanitized := html.EscapeString(input)
+	//sanitized = strings.ReplaceAll(sanitized, "<", "&lt;")
+	//sanitized = strings.ReplaceAll(sanitized, ">", "&gt;")
+	sanitized = strings.TrimSpace(sanitized)
+	maxLength := 1000
+	if len(sanitized) > maxLength {
+		sanitized = sanitized[:maxLength]
+	}
+	return sanitized
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
@@ -126,8 +141,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
                 username := r.FormValue("username")
                 password := r.FormValue("password")
                 
+                usernameSanitized := sanitizeUserInput(username)
+                passwordSanitized := sanitizeUserInput(password)
+                
                 // Validation logic
-                if len(username) < 4 || len(username) > 20 {
+                if len(usernameSanitized) < 4 || len(usernameSanitized) > 20 {
                 	tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
@@ -136,8 +154,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 			
 			err = tmpl.Execute(w, LoginPageData{
-				Username: username,
-				Password: password,
+				Username: usernameSanitized,
+				Password: passwordSanitized,
 				Error: "login invalid",
 			})
 			if err != nil {
@@ -149,7 +167,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
                 }
                 
-                if len(password) < 3 || len(password) > 20 {
+                if len(passwordSanitized) < 4 || len(passwordSanitized) > 20 {
                 	tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
@@ -158,8 +176,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 			
 			err = tmpl.Execute(w, LoginPageData{
-				Username: username,
-				Password: password,
+				Username: usernameSanitized,
+				Password: passwordSanitized,
 				Error: "login invalid",
 			})
 			if err != nil {
@@ -171,15 +189,17 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
                 }
 
-                if username == "user" && password == "pass" {
+                if usernameSanitized == "user" && passwordSanitized == "pass" {
+                	
                 	// Create JWT claims
                 	expirationTime := time.Now().Add(5 * time.Minute)
                 	claims := &Claims{
-                		Username: username,
+                		Username: usernameSanitized,
                 		RegisteredClaims: jwt.RegisteredClaims{
                 			ExpiresAt: jwt.NewNumericDate(expirationTime),
                 		},
                 	}
+                	
                 	// Create the JWT token
                 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
                 	tokenString, err := token.SignedString(jwtKey)
@@ -196,6 +216,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
                 	})
                         http.Redirect(w, r, "/dashboard", http.StatusFound)
                         return
+                
                 } else {
                         //fmt.Fprintf(w, "Login failed")
                         tmpl, err := template.ParseFiles("login.html")
@@ -206,8 +227,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 			
 			err = tmpl.Execute(w, LoginPageData{
-				Username: username,
-				Password: password,
+				Username: usernameSanitized,
+				Password: passwordSanitized,
 				Error: "login invalid",
 			})
 			if err != nil {
