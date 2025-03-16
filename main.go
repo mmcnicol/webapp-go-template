@@ -35,6 +35,12 @@ type PageData struct {
         LabResults      []string
 }
 
+type LoginPageData struct {
+        Username        string
+        Password        string
+        Error        string
+}
+
 func main() {
 
 	secret, err := generateRandomSecret(32) // 32 bytes = 256 bits
@@ -42,6 +48,7 @@ func main() {
 		fmt.Println("Error generating secret:", err)
 		return
 	}
+	
 	fmt.Println("Generated Secret Key:", secret)
 	jwtKey = []byte(secret)
 	
@@ -88,9 +95,81 @@ func verifyToken(r *http.Request) (*Claims, error) {
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method == http.MethodGet {
+		tmpl, err := template.ParseFiles("login.html")
+		if err != nil {
+        		fmt.Println("template parsing error:", err)
+        		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        		return
+        	}
+        	
+        	err = tmpl.Execute(w, LoginPageData{}) // Initial empty form
+        	if err != nil {
+       		 	fmt.Println("template execution error:", err)
+        		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+        		return
+        	}
+		
+		return
+	}
+	
         if r.Method == http.MethodPost {
+        
+        	err := r.ParseForm()
+        	if err != nil {
+       		 	fmt.Println("error parsing form:", err)
+        		http.Error(w, "Bad Request", http.StatusBadRequest)
+        		return
+        	}
+        	
                 username := r.FormValue("username")
                 password := r.FormValue("password")
+                
+                // Validation logic
+                if len(username) < 4 || len(username) > 20 {
+                	tmpl, err := template.ParseFiles("login.html")
+			if err != nil {
+				fmt.Println("template parsing error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			err = tmpl.Execute(w, LoginPageData{
+				Username: username,
+				Password: password,
+				Error: "login invalid",
+			})
+			if err != nil {
+	       		 	fmt.Println("template execution error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			return
+                }
+                
+                if len(password) < 3 || len(password) > 20 {
+                	tmpl, err := template.ParseFiles("login.html")
+			if err != nil {
+				fmt.Println("template parsing error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			err = tmpl.Execute(w, LoginPageData{
+				Username: username,
+				Password: password,
+				Error: "login invalid",
+			})
+			if err != nil {
+	       		 	fmt.Println("template execution error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			return
+                }
 
                 if username == "user" && password == "pass" {
                 	// Create JWT claims
@@ -118,13 +197,33 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
                         http.Redirect(w, r, "/dashboard", http.StatusFound)
                         return
                 } else {
-                        fmt.Fprintf(w, "Login failed")
-                        return
+                        //fmt.Fprintf(w, "Login failed")
+                        tmpl, err := template.ParseFiles("login.html")
+			if err != nil {
+				fmt.Println("template parsing error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			err = tmpl.Execute(w, LoginPageData{
+				Username: username,
+				Password: password,
+				Error: "login invalid",
+			})
+			if err != nil {
+	       		 	fmt.Println("template execution error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			
+			return
                 }
         }
 
-        tmpl := template.Must(template.ParseFiles("login.html"))
-        tmpl.Execute(w, nil)
+	//tmpl := template.Must(template.ParseFiles("login.html"))
+        //tmpl.Execute(w, nil)
+        
+	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 }
 
 func getNavigation(gopherContext bool) []Navigation {

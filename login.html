@@ -5,11 +5,14 @@
 </head>
 <body>
     <h1>Login</h1>
+    {{ if .Error }}
+    <p style="color: red;">{{ .Error }}</p>
+    {{ end }}
     <form method="post">
         <label for="username">Username:</label>
-        <input type="text" name="username" id="username"><br>
+        <input type="text" name="username" id="username" value="{{ .Username }}"><br>
         <label for="password">Password:</label>
-        <input type="password" name="password" id="password"><br>
+        <input type="password" name="password" id="password" value="{{ . }}"><br>
         <button type="submit">Login</button>
     </form>
 </body>
