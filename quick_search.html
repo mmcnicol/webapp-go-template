@@ -1,3 +1,8 @@
 {{define "quick_search"}}
-Quick Search: <form method="post" action="/search"><input type="text" name="query"><button type="submit">Search</button></form>
+Quick Search: 
+<form method="post" action="/search">
+    <input type="hidden" name="csrf_token" value="{{ .Token }}">
+    <input type="text" name="query">
+    <button type="submit">Search</button>
+</form>
 {{end}}

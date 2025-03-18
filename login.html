@@ -9,6 +9,7 @@
     <p style="color: red;">{{ .Error }}</p>
     {{ end }}
     <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ .Token }}">
         <label for="username">Username:</label>
         <input type="text" name="username" id="username" value="{{ .Username }}"><br>
         <label for="password">Password:</label>

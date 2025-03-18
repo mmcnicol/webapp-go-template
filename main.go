@@ -29,6 +29,7 @@ type Navigation struct {
 type PageData struct {
 	LoggedIn      bool
 	Username      string
+	Token         string
 	Navigation    []Navigation
 	SearchResults []string
 	GopherName    string
@@ -41,6 +42,7 @@ type LoginPageData struct {
 	Username string
 	Password string
 	Error    string
+	Token    string
 }
 
 func main() {
@@ -61,6 +63,35 @@ func main() {
 	http.HandleFunc("/search", handleSearch)
 	fmt.Println("Server listening on :8080")
 	http.ListenAndServe(":8080", nil)
+}
+
+func generateCSRFToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+
+	token := base64.StdEncoding.EncodeToString(b)
+	return token, nil
+}
+
+func setCSRFCookie(w http.ResponseWriter, token, string) {
+	http.SetCookie(w, &http.Cookie{
+		Name: "csrf_token",
+		Value: token,
+		HttpOnly: true,
+		Secure: false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func getCSRFCookie(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("csrf_token")
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
 }
 
 func generateRandomSecret(length int) (string, error) {
@@ -112,6 +143,16 @@ func sanitizeUserInput(input string) string {
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
+
+		token, err := generateCSRFToken()
+		if err != nil {
+			fmt.Println("CSRF token generation error:", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		setCSRFCookie(w, token)
+
 		tmpl, err := template.ParseFiles("login.html")
 		if err != nil {
 			fmt.Println("template parsing error:", err)
@@ -119,7 +160,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = tmpl.Execute(w, LoginPageData{}) // Initial empty form
+		data := LoginPageData{ // Initial empty form
+			Token:      token,
+		}
+
+		err = tmpl.Execute(w, data)
 		if err != nil {
 			fmt.Println("template execution error:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -138,6 +183,21 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		csrfToken := r.FormValue("csrf_token")
+
+		cookieToken, err := getCSRFCookie(r)
+		if err != nil {
+			fmt.Println("error reading CSRF token from cookie:", err)
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		
+		if cookieToken != csrfToken {
+			fmt.Println("CSRF token mismatch")
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
@@ -146,6 +206,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		// Validation logic
 		if len(usernameSanitized) < 4 || len(usernameSanitized) > 20 {
+
+			token, err := generateCSRFToken()
+			if err != nil {
+				fmt.Println("CSRF token generation error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+	
+			setCSRFCookie(w, token)
+
 			tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
@@ -157,6 +227,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				Username: usernameSanitized,
 				Password: passwordSanitized,
 				Error:    "login invalid",
+				Token:    token,
 			})
 			if err != nil {
 				fmt.Println("template execution error:", err)
@@ -168,6 +239,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(passwordSanitized) < 4 || len(passwordSanitized) > 20 {
+
+			token, err := generateCSRFToken()
+			if err != nil {
+				fmt.Println("CSRF token generation error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+	
+			setCSRFCookie(w, token)
+
 			tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
@@ -179,6 +260,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				Username: usernameSanitized,
 				Password: passwordSanitized,
 				Error:    "login invalid",
+				Token:    token,
 			})
 			if err != nil {
 				fmt.Println("template execution error:", err)
@@ -202,11 +284,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 			// Create the JWT token
 			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			
 			tokenString, err := token.SignedString(jwtKey)
 			if err != nil {
 				http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 				return
 			}
+
 			// Set the token as a cookie
 			http.SetCookie(w, &http.Cookie{
 				Name:     "token",
@@ -219,6 +303,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		} else {
 			//fmt.Fprintf(w, "Login failed")
+
+			token, err := generateCSRFToken()
+			if err != nil {
+				fmt.Println("CSRF token generation error:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+	
+			setCSRFCookie(w, token)
+	
 			tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
@@ -230,6 +324,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				Username: usernameSanitized,
 				Password: passwordSanitized,
 				Error:    "login invalid",
+				Token:    token,
 			})
 			if err != nil {
 				fmt.Println("template execution error:", err)
@@ -269,20 +364,32 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := generateCSRFToken()
+	if err != nil {
+		fmt.Println("CSRF token generation error:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	setCSRFCookie(w, token)
+
 	data := PageData{
 		LoggedIn:      true,
 		Username:      claims.Username,
+		Token:         token,
 		Navigation:    getNavigation(false),
 		RecentGophers: []string{"Gopher A", "Gopher B", "Gopher C"}, // Simulated results
 		Documents:     []string{},
 		LabResults:    []string{},
 	}
+	
 	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 	if err != nil {
 		fmt.Println("template parsing error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		fmt.Println("template execution error:", err)
@@ -299,21 +406,33 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := generateCSRFToken()
+	if err != nil {
+		fmt.Println("CSRF token generation error:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	setCSRFCookie(w, token)
+
 	data := PageData{
 		LoggedIn:      true,
 		Username:      claims.Username,
+		Token:         token,
 		Navigation:    getNavigation(true),
 		GopherName:    "placeholder",
 		RecentGophers: []string{},
 		Documents:     []string{"Document 1", "Document 2", "Document 3"},
 		LabResults:    []string{},
 	}
+	
 	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 	if err != nil {
 		fmt.Println("template parsing error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		fmt.Println("template execution error:", err)
@@ -330,21 +449,33 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := generateCSRFToken()
+	if err != nil {
+		fmt.Println("CSRF token generation error:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	setCSRFCookie(w, token)
+
 	data := PageData{
 		LoggedIn:      true,
 		Username:      claims.Username,
+		Token:         token,
 		Navigation:    getNavigation(true),
 		GopherName:    "placeholder",
 		RecentGophers: []string{},
 		Documents:     []string{},
 		LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 	}
+	
 	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 	if err != nil {
 		fmt.Println("template parsing error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		fmt.Println("template execution error:", err)
@@ -362,23 +493,51 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+
+		err := r.ParseForm()
+		if err != nil {
+			fmt.Println("error parsing form:", err)
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		csrfToken := r.FormValue("csrf_token")
+		
+		cookieToken, err := getCSRFCookie(r)
+		if err != nil {
+			fmt.Println("error reading CSRF token from cookie:", err)
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		
+		if cookieToken != csrfToken {
+			fmt.Println("CSRF token mismatch")
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
 		query := r.FormValue("query")
+		querySanitized := sanitizeUserInput(query)
+		
 		//searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
+		
 		data := PageData{
 			LoggedIn:      true,
 			Username:      claims.Username,
 			Navigation:    getNavigation(true),
-			GopherName:    query,
+			GopherName:    querySanitized,
 			RecentGophers: []string{},
 			Documents:     []string{},
 			LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 		}
+
 		tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 		if err != nil {
 			fmt.Println("template parsing error:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
+
 		err = tmpl.ExecuteTemplate(w, "base.html", data)
 		if err != nil {
 			fmt.Println("template execution error:", err)
