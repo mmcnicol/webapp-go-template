@@ -229,9 +229,21 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			permissionsArray := []string{"quicksearch", "documents", "results"}
 			permissions := strings.Join(permissionsArray, ",")
 
-			tokenString, err := createToken(usernameSanitized, permissions)
+			// Create JWT claims
+			claims := GopherJWTClaims{
+				"sub":         "1234567890",
+				"Username":    username,
+				"Permissions": permissions,
+				"iat":         time.Now().Unix(),
+				"exp":         time.Now().Add(5 * time.Minute).Unix(), // expiration claim
+			}
+
+			// Create the JWT
+			j := NewGopherJWT()
+			tokenString, err := j.CreateToken(claims, string(jwtKey[:]))
 			if err != nil {
-				http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+				log.Println("error creating JWT")
+				http.Error(w, "Failed to create JWT", http.StatusInternalServerError)
 				return
 			}
 
@@ -542,10 +554,21 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Create new JWT with GopherId
-		tokenString, err = createTokenWithGopherId(claims["Username"].(string), claims["Permissions"].(string), gopherId)
+		// Create JWT claims
+		claims = GopherJWTClaims{
+			"sub":         "1234567890",
+			"Username":    claims["Username"].(string),
+			"Permissions": claims["Permissions"].(string),
+			"GopherId":    gopherId,
+			"iat":         time.Now().Unix(),
+			"exp":         time.Now().Add(5 * time.Minute).Unix(), // expiration claim
+		}
+
+		// Create the JWT
+		tokenString, err = j.CreateToken(claims, string(jwtKey[:]))
 		if err != nil {
-			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+			log.Println("error creating JWT")
+			http.Error(w, "Failed to create JWT", http.StatusInternalServerError)
 			return
 		}
 
@@ -626,113 +649,3 @@ func generateRandomSecret(length int) (string, error) {
 
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
-
-func createToken(username string, permissions string) (string, error) {
-
-	// Create JWT claims
-	/*
-		expirationTime := time.Now().Add(5 * time.Minute)
-		claims := &Claims{
-			Username:    username,
-			Permissions: permissions,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(expirationTime),
-			},
-		}
-	*/
-
-	claims := GopherJWTClaims{
-		"sub":         "1234567890",
-		"Username":    username,
-		"Permissions": permissions,
-		"iat":         time.Now().Unix(),
-		"exp":         time.Now().Add(5 * time.Minute).Unix(), // expiration claim
-	}
-
-	// Create the JWT token
-	/*
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-		tokenString, err := token.SignedString(jwtKey)
-		if err != nil {
-			log.Println("error signing JWT")
-			//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-			return "", err
-		}
-	*/
-
-	j := NewGopherJWT()
-	tokenString, err := j.CreateToken(claims, string(jwtKey[:]))
-	if err != nil {
-		log.Println("error creating JWT")
-		return "", err
-	}
-
-	return tokenString, nil
-}
-
-func createTokenWithGopherId(username string, permissions string, gopherId string) (string, error) {
-
-	// Create JWT claims
-	/*
-		expirationTime := time.Now().Add(5 * time.Minute)
-		claims := &Claims{
-			Username:    username,
-			Permissions: permissions,
-			GopherId:    gopherId,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(expirationTime),
-			},
-		}
-	*/
-
-	claims := GopherJWTClaims{
-		"sub":         "1234567890",
-		"Username":    username,
-		"Permissions": permissions,
-		"GopherId":    gopherId,
-		"iat":         time.Now().Unix(),
-		"exp":         time.Now().Add(5 * time.Minute).Unix(), // expiration claim
-	}
-
-	// Create the JWT token
-	/*
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-		tokenString, err := token.SignedString(jwtKey)
-		if err != nil {
-			log.Println("error signing JWT")
-			//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-			return "", err
-		}
-	*/
-
-	j := NewGopherJWT()
-	tokenString, err := j.CreateToken(claims, string(jwtKey[:]))
-	if err != nil {
-		log.Println("error creating JWT")
-		return "", err
-	}
-
-	return tokenString, nil
-}
-
-/*
-func verifyToken(r *http.Request) (GopherJWTClaims, error) {
-
-	cookie, err := r.Cookie("token")
-	if err != nil {
-		return nil, err
-	}
-
-	tokenString := cookie.Value
-
-	j := NewGopherJWT()
-	claims, err := j.GetClaims(tokenString)
-	if err != nil {
-		return nil, fmt.Errorf("error getting claims: %+v", err)
-	}
-
-	return claims, nil
-}
-*/
