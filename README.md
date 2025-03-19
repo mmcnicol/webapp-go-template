@@ -15,4 +15,6 @@ gofmt -w main.go
 
 https://developer.hashicorp.com/nomad/tutorials/templates/go-template-syntax
 
+https://go.dev/blog/routing-enhancements
+
 

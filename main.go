@@ -26,6 +26,8 @@ type Claims struct {
 
 type Middleware func(http.HandlerFunc) http.HandlerFunc
 
+var tmpl *template.Template
+
 type Navigation struct {
 	Page     string
 	Endpoint string
@@ -48,6 +50,14 @@ type LoginPageData struct {
 	Password string
 	Error    string
 	Token    string
+}
+
+func init() {
+	var err error
+	tmpl, err = template.ParseGlob("templates/*.html")
+	if err != nil {
+		log.Fatal("Error loading templates:" + err.Error())
+	}
 }
 
 func main() {
@@ -279,7 +289,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("GET - created CSRF token: ", token)
 		setCSRFCookie(w, token)
 		
-		tmpl, err := template.ParseFiles("login.html")
+		tmpl, err := template.ParseFiles("templates/login.html")
 		if err != nil {
 			fmt.Println("template parsing error:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -421,7 +431,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
 	
-			tmpl, err := template.ParseFiles("login.html")
+			tmpl, err := template.ParseFiles("templates/login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -494,12 +504,14 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		LabResults:    []string{},
 	}
 	
+	/*
 	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 	if err != nil {
 		fmt.Println("template parsing error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	*/
 	
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
@@ -553,12 +565,14 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		LabResults:    []string{},
 	}
 	
+	/*
 	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 	if err != nil {
 		fmt.Println("template parsing error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	*/
 	
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
@@ -612,12 +626,14 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 	}
 	
+	/*
 	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 	if err != nil {
 		fmt.Println("template parsing error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	*/
 
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
@@ -688,13 +704,15 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			Documents:     []string{},
 			LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 		}
-
+		
+		/*
 		tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
 		if err != nil {
 			fmt.Println("template parsing error:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
+		*/
 
 		err = tmpl.ExecuteTemplate(w, "base.html", data)
 		if err != nil {
