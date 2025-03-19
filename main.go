@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -18,17 +17,6 @@ import (
 
 // var jwtKey = []byte("your-secret-key")
 var jwtKey = []byte{}
-
-/*
-type Claims struct {
-	Username    string          `json:"Username"`
-	Permissions map[string]bool `json:"Permissions"`
-	GopherId    string          `json:"GopherId"`
-	jwt.RegisteredClaims
-}
-*/
-
-//type Middleware func(http.HandlerFunc) http.HandlerFunc
 
 var tmpl *template.Template
 
@@ -305,12 +293,25 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleDashboard()")
 
-	claims, err := verifyToken(r)
+	// Get JWT Claims
+	cookie, err := r.Cookie("token")
 	if err != nil {
+		log.Println("error accessing token cookie:", err)
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
 
+	tokenString := cookie.Value
+
+	j := NewGopherJWT()
+	claims, err := j.GetClaims(tokenString)
+	if err != nil {
+		log.Println("GetClaims error:", err)
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
+
+	// Prepare CSRF token
 	c := NewGopherCSRF()
 	token, err := c.GenerateCSRFToken()
 	if err != nil {
@@ -322,6 +323,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	log.Println("created CSRF token: ", token)
 	c.SetCSRFCookie(w, token)
 
+	// Prepare page data struct
 	data := PageData{
 		LoggedIn:      true,
 		Username:      claims["Username"].(string),
@@ -332,6 +334,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		LabResults:    []string{},
 	}
 
+	// Write page
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		log.Println("template execution error:", err)
@@ -344,18 +347,32 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleDocuments()")
 
-	claims, err := verifyToken(r)
+	// Get JWT Claims
+	cookie, err := r.Cookie("token")
 	if err != nil {
+		log.Println("error accessing token cookie:", err)
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
 
+	tokenString := cookie.Value
+
+	j := NewGopherJWT()
+	claims, err := j.GetClaims(tokenString)
+	if err != nil {
+		log.Println("GetClaims error:", err)
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
+
+	// Do permission check
 	if !hasPermission("documents", claims["Permissions"].(string)) {
-		log.Println("error accessing claim permissions")
+		log.Println("insufficient claim permissions")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
 
+	// Prepare CSRF token
 	c := NewGopherCSRF()
 	token, err := c.GenerateCSRFToken()
 	if err != nil {
@@ -367,6 +384,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 	log.Println("created CSRF token: ", token)
 	c.SetCSRFCookie(w, token)
 
+	// Fetch data
 	gopherDemographics, err := getGopherDemographics(claims["GopherId"].(string))
 	if err != nil {
 		log.Println("get gopher demographics error:", err)
@@ -374,6 +392,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prepare page data struct
 	data := PageData{
 		LoggedIn:           true,
 		Username:           claims["Username"].(string),
@@ -385,6 +404,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		LabResults:         []string{},
 	}
 
+	// Write page
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		log.Println("template execution error:", err)
@@ -397,18 +417,32 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleResults()")
 
-	claims, err := verifyToken(r)
+	// Get JWT Claims
+	cookie, err := r.Cookie("token")
 	if err != nil {
+		log.Println("error accessing token cookie:", err)
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
 
+	tokenString := cookie.Value
+
+	j := NewGopherJWT()
+	claims, err := j.GetClaims(tokenString)
+	if err != nil {
+		log.Println("GetClaims error:", err)
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
+
+	// Do permission check
 	if !hasPermission("results", claims["Permissions"].(string)) {
-		log.Println("error accessing claim permissions")
+		log.Println("insufficient claim permissions")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
 
+	// Prepare CSRF token
 	c := NewGopherCSRF()
 	token, err := c.GenerateCSRFToken()
 	if err != nil {
@@ -420,6 +454,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 	log.Println("created CSRF token: ", token)
 	c.SetCSRFCookie(w, token)
 
+	// Fetch data
 	gopherDemographics, err := getGopherDemographics(claims["GopherId"].(string))
 	if err != nil {
 		log.Println("get gopher demographics error:", err)
@@ -427,6 +462,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prepare page data struct
 	data := PageData{
 		LoggedIn:           true,
 		Username:           claims["Username"].(string),
@@ -438,6 +474,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		LabResults:         []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 	}
 
+	// Write page
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		log.Println("template execution error:", err)
@@ -452,18 +489,32 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 
-		claims, err := verifyToken(r)
+		// Get JWT Claims
+		cookie, err := r.Cookie("token")
 		if err != nil {
+			log.Println("error accessing token cookie:", err)
 			http.Redirect(w, r, "/", http.StatusUnauthorized)
 			return
 		}
 
+		tokenString := cookie.Value
+
+		j := NewGopherJWT()
+		claims, err := j.GetClaims(tokenString)
+		if err != nil {
+			log.Println("GetClaims error:", err)
+			http.Redirect(w, r, "/", http.StatusUnauthorized)
+			return
+		}
+
+		// Do permission check
 		if !hasPermission("quicksearch", claims["Permissions"].(string)) {
-			log.Println("error accessing claim permissions")
+			log.Println("insufficient claim permissions")
 			http.Redirect(w, r, "/", http.StatusUnauthorized)
 			return
 		}
 
+		// Process expected input
 		err = r.ParseForm()
 		if err != nil {
 			log.Println("error parsing form:", err)
@@ -476,22 +527,29 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		querySanitized := s.SanitizeUserInput(query)
 		gopherId := querySanitized
 
-		//searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
+		// Validation logic
+		if len(gopherId) == 0 || len(gopherId) > 20 {
+			log.Println("GopherId validation failed")
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
 
-		gopherDemographics, err := getGopherDemographics(gopherId)
+		// Fetch data
+		_, err = getGopherDemographics(gopherId)
 		if err != nil {
 			log.Println("get gopher demographics error:", err)
 			http.Error(w, "get gopher demographics error", http.StatusInternalServerError)
 			return
 		}
 
-		tokenString, err := createTokenWithGopherId(claims["Username"].(string), claims["Permissions"].(string), gopherId)
+		// Create new JWT with GopherId
+		tokenString, err = createTokenWithGopherId(claims["Username"].(string), claims["Permissions"].(string), gopherId)
 		if err != nil {
 			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 			return
 		}
 
-		// Set the token as a cookie
+		// Set the JWT as a cookie
 		expirationTime := time.Now().Add(5 * time.Minute)
 		http.SetCookie(w, &http.Cookie{
 			Name:     "token",
@@ -500,25 +558,11 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true, // Important for security
 		})
 
-		data := PageData{
-			LoggedIn:           true,
-			Username:           claims["Username"].(string),
-			Navigation:         getNavigation(true),
-			GopherDemographics: gopherDemographics,
-			RecentGophers:      []string{},
-			Documents:          []string{},
-			LabResults:         []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
-		}
-
-		err = tmpl.ExecuteTemplate(w, "base.html", data)
-		if err != nil {
-			log.Println("template execution error:", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+		http.Redirect(w, r, "/results", http.StatusFound) // redirect to default Gopher context page
 		return
 	}
-	http.Redirect(w, r, "/dashboard", http.StatusFound)
+
+	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 }
 
 func getNavigation(gopherContext bool) []Navigation {
@@ -562,6 +606,7 @@ func getGopherDemographics(gopherId string) (GopherDemographics, error) {
 }
 
 func hasPermission(permission string, permissions string) bool {
+
 	permissionsArray := strings.Split(permissions, ",")
 	for _, p := range permissionsArray {
 		if p == permission {
@@ -572,6 +617,7 @@ func hasPermission(permission string, permissions string) bool {
 }
 
 func generateRandomSecret(length int) (string, error) {
+
 	bytes := make([]byte, length)
 	_, err := rand.Read(bytes)
 	if err != nil {
@@ -671,6 +717,7 @@ func createTokenWithGopherId(username string, permissions string, gopherId strin
 	return tokenString, nil
 }
 
+/*
 func verifyToken(r *http.Request) (GopherJWTClaims, error) {
 
 	cookie, err := r.Cookie("token")
@@ -680,26 +727,12 @@ func verifyToken(r *http.Request) (GopherJWTClaims, error) {
 
 	tokenString := cookie.Value
 
-	/*
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if !token.Valid {
-			//return nil, fmt.Errorf("invalid token")
-			return nil, errors.New("invalid token")
-		}
-	*/
-
 	j := NewGopherJWT()
 	claims, err := j.GetClaims(tokenString)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting claims: %+v", err)
+		return nil, fmt.Errorf("error getting claims: %+v", err)
 	}
 
 	return claims, nil
 }
+*/

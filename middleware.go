@@ -27,23 +27,24 @@ func (m GopherMiddleware) JWT() Middleware {
 
 		return func(w http.ResponseWriter, r *http.Request) {
 
-			//claims, err := verifyToken(r)
-			_, err := verifyToken(r)
+			// Get JWT Claims
+			cookie, err := r.Cookie("token")
 			if err != nil {
-				log.Println("JWT middleware - token verification failed")
+				log.Println("error accessing JWT cookie:", err)
 				http.Redirect(w, r, "/", http.StatusUnauthorized)
 				return
 			}
 
-			/*
-				j := NewGopherJWT()
-				err := j.VerifyToken(token, secretKey)
-				if err != nil {
-					log.Println("JWT middleware - token verification failed")
-					http.Redirect(w, r, "/", http.StatusUnauthorized)
-					return
-				}
-			*/
+			tokenString := cookie.Value
+
+			j := NewGopherJWT()
+			//claims, err := j.GetClaims(tokenString)
+			err = j.VerifyToken(tokenString, string(jwtKey[:]))
+			if err != nil {
+				log.Println("VerifyToken error:", err)
+				http.Redirect(w, r, "/", http.StatusUnauthorized)
+				return
+			}
 
 			log.Println("JWT middleware - token verified")
 
