@@ -19,6 +19,8 @@ var jwtKey = []byte{}
 
 type Claims struct {
 	Username string `json:"Username"`
+	Permissions map[string]bool `json:"Permissions"`
+	GopherId string `json:"GopherId"`
 	jwt.RegisteredClaims
 }
 
@@ -172,6 +174,57 @@ func generateRandomSecret(length int) (string, error) {
 	}
 
 	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func createToken(username string, permissions map[string]bool) (string, error) {
+	
+	// Create JWT claims
+	expirationTime := time.Now().Add(5 * time.Minute)
+	claims := &Claims{
+		Username: username,
+		Permissions: permissions,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	// Create the JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		fmt.Println("error signing JWT")
+		//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return "", err
+	}
+	
+	return tokenString, nil
+}
+
+func createTokenWithGopherId(username string, permissions map[string]bool, gopherId string) (string, error) {
+	
+	// Create JWT claims
+	expirationTime := time.Now().Add(5 * time.Minute)
+	claims := &Claims{
+		Username: username,
+		Permissions: permissions,
+		GopherId: gopherId,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	// Create the JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		fmt.Println("error signing JWT")
+		//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return "", err
+	}
+	
+	return tokenString, nil
 }
 
 func verifyToken(r *http.Request) (*Claims, error) {
@@ -333,25 +386,19 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		if usernameSanitized == "user" && passwordSanitized == "pass" {
 
-			// Create JWT claims
-			expirationTime := time.Now().Add(5 * time.Minute)
-			claims := &Claims{
-				Username: usernameSanitized,
-				RegisteredClaims: jwt.RegisteredClaims{
-					ExpiresAt: jwt.NewNumericDate(expirationTime),
-				},
-			}
-
-			// Create the JWT token
-			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			permissions := make(map[string]bool)
+			permissions["quicksearch"] = true
+			permissions["documents"] = true
+			permissions["results"] = true
 			
-			tokenString, err := token.SignedString(jwtKey)
+			tokenString, err := createToken(usernameSanitized, permissions)
 			if err != nil {
 				http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 				return
 			}
 
 			// Set the token as a cookie
+			expirationTime := time.Now().Add(5 * time.Minute)
 			http.SetCookie(w, &http.Cookie{
 				Name:     "token",
 				Value:    tokenString,
@@ -471,7 +518,20 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
+
+	v, ok := claims.Permissions["documents"]
+	if ok != true {
+		fmt.Println("error accessing claim permissions")
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
 	
+	if v != true {
+		fmt.Println("claim permission is not true")
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
+
 	token, err := generateCSRFToken()
 	if err != nil {
 		fmt.Println("CSRF token generation error:", err)
@@ -487,7 +547,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		Username:      claims.Username,
 		Token:         token,
 		Navigation:    getNavigation(true),
-		GopherName:    "placeholder",
+		GopherName:    claims.GopherId,
 		RecentGophers: []string{},
 		Documents:     []string{"Document 1", "Document 2", "Document 3"},
 		LabResults:    []string{},
@@ -517,7 +577,20 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
+
+	v, ok := claims.Permissions["results"]
+	if ok != true {
+		fmt.Println("error accessing claim permissions")
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
 	
+	if v != true {
+		fmt.Println("claim permission is not true")
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
+
 	token, err := generateCSRFToken()
 	if err != nil {
 		fmt.Println("CSRF token generation error:", err)
@@ -533,7 +606,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		Username:      claims.Username,
 		Token:         token,
 		Navigation:    getNavigation(true),
-		GopherName:    "placeholder",
+		GopherName:    claims.GopherId,
 		RecentGophers: []string{},
 		Documents:     []string{},
 		LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
@@ -566,6 +639,19 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		
+		v, ok := claims.Permissions["quicksearch"]
+		if ok != true {
+			fmt.Println("error accessing claim permissions")
+			http.Redirect(w, r, "/", http.StatusUnauthorized)
+			return
+		}
+		
+		if v != true {
+			fmt.Println("claim permission is not true")
+			http.Redirect(w, r, "/", http.StatusUnauthorized)
+			return
+		}
+		
 		err = r.ParseForm()
 		if err != nil {
 			fmt.Println("error parsing form:", err)
@@ -577,6 +663,21 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		querySanitized := sanitizeUserInput(query)
 		
 		//searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
+
+		tokenString, err := createTokenWithGopherId(claims.Username, claims.Permissions, querySanitized)
+		if err != nil {
+			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+			return
+		}
+
+		// Set the token as a cookie
+		expirationTime := time.Now().Add(5 * time.Minute)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "token",
+			Value:    tokenString,
+			Expires:  expirationTime,
+			HttpOnly: true, // Important for security
+		})
 		
 		data := PageData{
 			LoggedIn:      true,
