@@ -27,7 +27,7 @@ func (m GopherMiddleware) JWT() Middleware {
 
 		return func(w http.ResponseWriter, r *http.Request) {
 
-			// Get JWT Claims
+			// Get JWT cookie
 			cookie, err := r.Cookie("token")
 			if err != nil {
 				log.Println("error accessing JWT cookie:", err)
@@ -38,7 +38,6 @@ func (m GopherMiddleware) JWT() Middleware {
 			tokenString := cookie.Value
 
 			j := NewGopherJWT()
-			//claims, err := j.GetClaims(tokenString)
 			err = j.VerifyToken(tokenString, string(jwtKey[:]))
 			if err != nil {
 				log.Println("VerifyToken error:", err)
