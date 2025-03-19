@@ -58,9 +58,9 @@ func main() {
 
 	http.HandleFunc("/", handleLogin)
 	http.HandleFunc("/dashboard", handleDashboard)
-	http.HandleFunc("/documents", handleDocuments)
-	http.HandleFunc("/results", handleResults)
-	http.HandleFunc("/search", handleSearch)
+	http.HandleFunc("GET /documents", handleDocuments)
+	http.HandleFunc("GET /results", handleResults)
+	http.HandleFunc("POST /search", handleSearch)
 	fmt.Println("Server listening on :8080")
 	http.ListenAndServe(":8080", nil)
 }
@@ -76,7 +76,7 @@ func generateCSRFToken() (string, error) {
 	return token, nil
 }
 
-func setCSRFCookie(w http.ResponseWriter, token, string) {
+func setCSRFCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "csrf_token",
 		Value: token,
@@ -142,6 +142,8 @@ func sanitizeUserInput(input string) string {
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 
+	fmt.Println("in handleLogin()")
+
 	if r.Method == http.MethodGet {
 
 		token, err := generateCSRFToken()
@@ -151,8 +153,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		fmt.Println("GET - created CSRF token: ", token)
 		setCSRFCookie(w, token)
-
+		
 		tmpl, err := template.ParseFiles("login.html")
 		if err != nil {
 			fmt.Println("template parsing error:", err)
@@ -184,6 +187,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		csrfToken := r.FormValue("csrf_token")
+		fmt.Println("POST - form CSRF token: ", csrfToken)
 
 		cookieToken, err := getCSRFCookie(r)
 		if err != nil {
@@ -192,6 +196,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		
+		fmt.Println("POST - cookie CSRF token: ", cookieToken)
 		if cookieToken != csrfToken {
 			fmt.Println("CSRF token mismatch")
 			http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -214,6 +219,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 	
+			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
 
 			tmpl, err := template.ParseFiles("login.html")
@@ -247,6 +253,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 	
+			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
 
 			tmpl, err := template.ParseFiles("login.html")
@@ -311,6 +318,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 	
+			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
 	
 			tmpl, err := template.ParseFiles("login.html")
@@ -358,6 +366,8 @@ func getNavigation(gopherContext bool) []Navigation {
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
+	fmt.Println("in handleDashboard()")
+
 	claims, err := verifyToken(r)
 	if err != nil {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -371,6 +381,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("created CSRF token: ", token)
 	setCSRFCookie(w, token)
 
 	data := PageData{
@@ -400,6 +411,8 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 func handleDocuments(w http.ResponseWriter, r *http.Request) {
 
+	fmt.Println("in handleDocuments()")
+
 	claims, err := verifyToken(r)
 	if err != nil {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -413,6 +426,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("created CSRF token: ", token)
 	setCSRFCookie(w, token)
 
 	data := PageData{
@@ -443,6 +457,8 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 
 func handleResults(w http.ResponseWriter, r *http.Request) {
 
+	fmt.Println("in handleResults()")
+
 	claims, err := verifyToken(r)
 	if err != nil {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -456,6 +472,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("created CSRF token: ", token)
 	setCSRFCookie(w, token)
 
 	data := PageData{
@@ -486,6 +503,8 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 
+	fmt.Println("in handleSearch()")
+	
 	claims, err := verifyToken(r)
 	if err != nil {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -502,6 +521,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		csrfToken := r.FormValue("csrf_token")
+		fmt.Println("POST - form CSRF token: ", csrfToken)
 		
 		cookieToken, err := getCSRFCookie(r)
 		if err != nil {
@@ -510,6 +530,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		
+		fmt.Println("POST - cookie CSRF token: ", cookieToken)
 		if cookieToken != csrfToken {
 			fmt.Println("CSRF token mismatch")
 			http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -548,3 +569,4 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/dashboard", http.StatusFound)
 }
+
