@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -28,6 +29,12 @@ type Middleware func(http.HandlerFunc) http.HandlerFunc
 
 var tmpl *template.Template
 
+type GopherDemographics struct {
+	GopherId    string
+	Name        string
+	DateOfBirth time.Time
+}
+
 type Navigation struct {
 	Page     string
 	Endpoint string
@@ -37,9 +44,9 @@ type PageData struct {
 	LoggedIn      bool
 	Username      string
 	Token         string
+	GopherDemographics GopherDemographics
 	Navigation    []Navigation
 	SearchResults []string
-	GopherName    string
 	RecentGophers []string
 	Documents     []string
 	LabResults    []string
@@ -273,6 +280,46 @@ func sanitizeUserInput(input string) string {
 	return sanitized
 }
 
+func getNavigation(gopherContext bool) []Navigation {
+	if gopherContext {
+		return []Navigation{
+			{Page: "Home", Endpoint: "/"},
+			{Page: "Documents", Endpoint: "/documents"},
+			{Page: "Results", Endpoint: "/results"},
+		}
+	} else {
+		return []Navigation{
+			{Page: "Home", Endpoint: "/"},
+		}
+	}
+}
+
+func getGopherDemographics(gopherId string) (GopherDemographics, error) {
+	switch(gopherId) {
+	case "1":
+		return GopherDemographics{
+			GopherId: "1",
+			Name: "Gopher A",
+			DateOfBirth: time.Date(1999, 1, 2, 0, 0, 0, 0, time.Local),
+		}, nil
+	case "2":
+		return GopherDemographics{
+			GopherId: "2",
+			Name: "Gopher B",
+			DateOfBirth: time.Date(2000, 2, 3, 0, 0, 0, 0, time.Local),
+		}, nil
+	case "3":
+		return GopherDemographics{
+			GopherId: "3",
+			Name: "Gopher C",
+			DateOfBirth: time.Date(2001, 3, 4, 0, 0, 0, 0, time.Local),
+		}, nil
+	default: 
+		//return GopherDemographics{}, nil
+		return GopherDemographics{}, errors.New("gopherId not found")
+	}
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("in handleLogin()")
@@ -460,20 +507,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 }
 
-func getNavigation(gopherContext bool) []Navigation {
-	if gopherContext {
-		return []Navigation{
-			{Page: "Home", Endpoint: "/"},
-			{Page: "Documents", Endpoint: "/documents"},
-			{Page: "Results", Endpoint: "/results"},
-		}
-	} else {
-		return []Navigation{
-			{Page: "Home", Endpoint: "/"},
-		}
-	}
-}
-
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("in handleDashboard()")
@@ -499,7 +532,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Username:      claims.Username,
 		Token:         token,
 		Navigation:    getNavigation(false),
-		RecentGophers: []string{"Gopher A", "Gopher B", "Gopher C"}, // Simulated results
+		RecentGophers: []string{"1", "2", "3"}, // Simulated results
 		Documents:     []string{},
 		LabResults:    []string{},
 	}
@@ -545,12 +578,19 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("created CSRF token: ", token)
 	setCSRFCookie(w, token)
 
+	gopherDemographics, err := getGopherDemographics(claims.GopherId)
+	if err != nil {
+		fmt.Println("get gopher demographics error:", err)
+		http.Error(w, "get gopher demographics error", http.StatusInternalServerError)
+		return
+	}
+	
 	data := PageData{
 		LoggedIn:      true,
 		Username:      claims.Username,
 		Token:         token,
 		Navigation:    getNavigation(true),
-		GopherName:    claims.GopherId,
+		GopherDemographics:    gopherDemographics,
 		RecentGophers: []string{},
 		Documents:     []string{"Document 1", "Document 2", "Document 3"},
 		LabResults:    []string{},
@@ -597,12 +637,19 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("created CSRF token: ", token)
 	setCSRFCookie(w, token)
 
+	gopherDemographics, err := getGopherDemographics(claims.GopherId)
+	if err != nil {
+		fmt.Println("get gopher demographics error:", err)
+		http.Error(w, "get gopher demographics error", http.StatusInternalServerError)
+		return
+	}
+	
 	data := PageData{
 		LoggedIn:      true,
 		Username:      claims.Username,
 		Token:         token,
 		Navigation:    getNavigation(true),
-		GopherName:    claims.GopherId,
+		GopherDemographics: gopherDemographics,
 		RecentGophers: []string{},
 		Documents:     []string{},
 		LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
@@ -650,10 +697,18 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 		query := r.FormValue("query")
 		querySanitized := sanitizeUserInput(query)
-
+		gopherId := querySanitized
+		
 		//searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
-
-		tokenString, err := createTokenWithGopherId(claims.Username, claims.Permissions, querySanitized)
+		
+		gopherDemographics, err := getGopherDemographics(gopherId)
+		if err != nil {
+			fmt.Println("get gopher demographics error:", err)
+			http.Error(w, "get gopher demographics error", http.StatusInternalServerError)
+			return
+		}
+				
+		tokenString, err := createTokenWithGopherId(claims.Username, claims.Permissions, gopherId)
 		if err != nil {
 			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 			return
@@ -672,7 +727,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			LoggedIn:      true,
 			Username:      claims.Username,
 			Navigation:    getNavigation(true),
-			GopherName:    querySanitized,
+			GopherDemographics: gopherDemographics,
 			RecentGophers: []string{},
 			Documents:     []string{},
 			LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},

@@ -1,5 +1,5 @@
 {{define "gopher_banner"}}
 <div class="gopher-banner">
-    Patient: {{.GopherName}}
+    {{.GopherDemographics.Name}} {{.GopherDemographics.DateOfBirth.Format "02/01/2006"}}
 </div>
 {{end}}
