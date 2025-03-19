@@ -5,30 +5,29 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"html"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // var jwtKey = []byte("your-secret-key")
 var jwtKey = []byte{}
 
+/*
 type Claims struct {
 	Username    string          `json:"Username"`
 	Permissions map[string]bool `json:"Permissions"`
 	GopherId    string          `json:"GopherId"`
 	jwt.RegisteredClaims
 }
+*/
 
-type Middleware func(http.HandlerFunc) http.HandlerFunc
+//type Middleware func(http.HandlerFunc) http.HandlerFunc
 
 var tmpl *template.Template
 
@@ -94,12 +93,14 @@ func main() {
 	log.Println("Generated Secret Key:", secret)
 	jwtKey = []byte(secret)
 
+	m := NewGopherMiddleware()
+
 	http.HandleFunc("GET /", handleLogin)
-	http.HandleFunc("POST /", Chain(handleLogin, CSRF()))
-	http.HandleFunc("GET /dashboard", Chain(handleDashboard, JWT()))
-	http.HandleFunc("GET /documents", Chain(handleDocuments, JWT()))
-	http.HandleFunc("GET /results", Chain(handleResults, JWT()))
-	http.HandleFunc("POST /search", Chain(handleSearch, JWT(), CSRF()))
+	http.HandleFunc("POST /", m.Chain(handleLogin, m.CSRF()))
+	http.HandleFunc("GET /dashboard", m.Chain(handleDashboard, m.JWT()))
+	http.HandleFunc("GET /documents", m.Chain(handleDocuments, m.JWT()))
+	http.HandleFunc("GET /results", m.Chain(handleResults, m.JWT()))
+	http.HandleFunc("POST /search", m.Chain(handleSearch, m.JWT(), m.CSRF()))
 
 	log.Println("Server is running on port 8080...")
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -107,101 +108,6 @@ func main() {
 	}
 
 	log.Println("Server exited cleanly")
-}
-
-func JWT() Middleware {
-
-	return func(f http.HandlerFunc) http.HandlerFunc {
-
-		return func(w http.ResponseWriter, r *http.Request) {
-
-			//claims, err := verifyToken(r)
-			_, err := verifyToken(r)
-			if err != nil {
-				log.Println("JWT middleware - token verification failed")
-				http.Redirect(w, r, "/", http.StatusUnauthorized)
-				return
-			}
-
-			log.Println("JWT middleware - token verified")
-
-			// Call the next middleware/handler in chain
-			f(w, r)
-		}
-	}
-}
-
-func CSRF() Middleware {
-
-	return func(f http.HandlerFunc) http.HandlerFunc {
-
-		return func(w http.ResponseWriter, r *http.Request) {
-
-			err := r.ParseForm()
-			if err != nil {
-				log.Println("error parsing form:", err)
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				return
-			}
-
-			csrfToken := r.FormValue("csrf_token")
-			log.Println("CSRF middleware - form CSRF token: ", csrfToken)
-
-			cookieToken, err := getCSRFCookie(r)
-			if err != nil {
-				log.Println("error reading CSRF token from cookie:", err)
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				return
-			}
-
-			log.Println("CSRF middleware - cookie CSRF token: ", cookieToken)
-			if cookieToken != csrfToken {
-				log.Println("CSRF token mismatch")
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				return
-			}
-
-			// Call the next middleware/handler in chain
-			f(w, r)
-		}
-	}
-}
-
-// Chain applies middlewares to a http.HandlerFunc
-func Chain(f http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
-	for _, m := range middlewares {
-		f = m(f)
-	}
-	return f
-}
-
-func generateCSRFToken() (string, error) {
-	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-
-	token := base64.StdEncoding.EncodeToString(b)
-	return token, nil
-}
-
-func setCSRFCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "csrf_token",
-		Value:    token,
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteStrictMode,
-	})
-}
-
-func getCSRFCookie(r *http.Request) (string, error) {
-	cookie, err := r.Cookie("csrf_token")
-	if err != nil {
-		return "", err
-	}
-	return cookie.Value, nil
 }
 
 func generateRandomSecret(length int) (string, error) {
@@ -217,22 +123,41 @@ func generateRandomSecret(length int) (string, error) {
 func createToken(username string, permissions map[string]bool) (string, error) {
 
 	// Create JWT claims
-	expirationTime := time.Now().Add(5 * time.Minute)
-	claims := &Claims{
-		Username:    username,
-		Permissions: permissions,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-		},
+	/*
+		expirationTime := time.Now().Add(5 * time.Minute)
+		claims := &Claims{
+			Username:    username,
+			Permissions: permissions,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(expirationTime),
+			},
+		}
+	*/
+
+	claims := GopherJWTClaims{
+		"sub":         "1234567890",
+		"Username":    username,
+		"Permissions": permissions,
+		"iat":         time.Now().Unix(),
+		"exp":         time.Now().Add(5 * time.Minute).Unix(), // expiration claim
 	}
 
 	// Create the JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	/*
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString(jwtKey)
+		tokenString, err := token.SignedString(jwtKey)
+		if err != nil {
+			log.Println("error signing JWT")
+			//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+			return "", err
+		}
+	*/
+
+	j := NewGopherJWT()
+	tokenString, err := j.CreateToken(claims, string(jwtKey[:]))
 	if err != nil {
-		log.Println("error signing JWT")
-		//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		log.Println("error creating JWT")
 		return "", err
 	}
 
@@ -242,30 +167,51 @@ func createToken(username string, permissions map[string]bool) (string, error) {
 func createTokenWithGopherId(username string, permissions map[string]bool, gopherId string) (string, error) {
 
 	// Create JWT claims
-	expirationTime := time.Now().Add(5 * time.Minute)
-	claims := &Claims{
-		Username:    username,
-		Permissions: permissions,
-		GopherId:    gopherId,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-		},
+	/*
+		expirationTime := time.Now().Add(5 * time.Minute)
+		claims := &Claims{
+			Username:    username,
+			Permissions: permissions,
+			GopherId:    gopherId,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(expirationTime),
+			},
+		}
+	*/
+
+	claims := GopherJWTClaims{
+		"sub":         "1234567890",
+		"Username":    username,
+		"Permissions": permissions,
+		"GopherId":    gopherId,
+		"iat":         time.Now().Unix(),
+		"exp":         time.Now().Add(5 * time.Minute).Unix(), // expiration claim
 	}
 
 	// Create the JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	/*
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString(jwtKey)
+		tokenString, err := token.SignedString(jwtKey)
+		if err != nil {
+			log.Println("error signing JWT")
+			//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+			return "", err
+		}
+	*/
+
+	j := NewGopherJWT()
+	tokenString, err := j.CreateToken(claims, string(jwtKey[:]))
 	if err != nil {
-		log.Println("error signing JWT")
-		//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		log.Println("error creating JWT")
 		return "", err
 	}
 
 	return tokenString, nil
 }
 
-func verifyToken(r *http.Request) (*Claims, error) {
+func verifyToken(r *http.Request) (GopherJWTClaims, error) {
+
 	cookie, err := r.Cookie("token")
 	if err != nil {
 		return nil, err
@@ -273,33 +219,28 @@ func verifyToken(r *http.Request) (*Claims, error) {
 
 	tokenString := cookie.Value
 
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
-	})
-	if err != nil {
-		return nil, err
-	}
+	/*
+		claims := &Claims{}
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtKey, nil
+		})
+		if err != nil {
+			return nil, err
+		}
 
-	if !token.Valid {
-		//return nil, fmt.Errorf("invalid token")
-		return nil, errors.New("invalid token")
+		if !token.Valid {
+			//return nil, fmt.Errorf("invalid token")
+			return nil, errors.New("invalid token")
+		}
+	*/
+
+	j := NewGopherJWT()
+	claims, err := j.GetClaims(tokenString)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting claims: %+v", err)
 	}
 
 	return claims, nil
-}
-
-func sanitizeUserInput(input string) string {
-
-	sanitized := html.EscapeString(input)
-	//sanitized = strings.ReplaceAll(sanitized, "<", "&lt;")
-	//sanitized = strings.ReplaceAll(sanitized, ">", "&gt;")
-	sanitized = strings.TrimSpace(sanitized)
-	maxLength := 1000
-	if len(sanitized) > maxLength {
-		sanitized = sanitized[:maxLength]
-	}
-	return sanitized
 }
 
 func getNavigation(gopherContext bool) []Navigation {
@@ -348,7 +289,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
 
-		token, err := generateCSRFToken()
+		c := NewGopherCSRF()
+		token, err := c.GenerateCSRFToken()
 		if err != nil {
 			log.Println("CSRF token generation error:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -356,7 +298,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Println("GET - created CSRF token: ", token)
-		setCSRFCookie(w, token)
+		c.SetCSRFCookie(w, token)
 
 		tmpl, err := template.ParseFiles("templates/login.html")
 		if err != nil {
@@ -391,13 +333,15 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		usernameSanitized := sanitizeUserInput(username)
-		passwordSanitized := sanitizeUserInput(password)
+		s := NewGopherSanitize()
+		usernameSanitized := s.SanitizeUserInput(username)
+		passwordSanitized := s.SanitizeUserInput(password)
 
 		// Validation logic
 		if len(usernameSanitized) < 4 || len(usernameSanitized) > 20 {
 
-			token, err := generateCSRFToken()
+			c := NewGopherCSRF()
+			token, err := c.GenerateCSRFToken()
 			if err != nil {
 				log.Println("CSRF token generation error:", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -405,7 +349,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 
 			log.Println("created CSRF token: ", token)
-			setCSRFCookie(w, token)
+			c.SetCSRFCookie(w, token)
 
 			tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
@@ -431,7 +375,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		if len(passwordSanitized) < 4 || len(passwordSanitized) > 20 {
 
-			token, err := generateCSRFToken()
+			c := NewGopherCSRF()
+			token, err := c.GenerateCSRFToken()
 			if err != nil {
 				log.Println("CSRF token generation error:", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -439,7 +384,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 
 			log.Println("created CSRF token: ", token)
-			setCSRFCookie(w, token)
+			c.SetCSRFCookie(w, token)
 
 			tmpl, err := template.ParseFiles("login.html")
 			if err != nil {
@@ -490,7 +435,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		} else {
 			//fmt.Fprintf(w, "Login failed")
 
-			token, err := generateCSRFToken()
+			c := NewGopherCSRF()
+			token, err := c.GenerateCSRFToken()
 			if err != nil {
 				log.Println("CSRF token generation error:", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -498,7 +444,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 
 			log.Println("created CSRF token: ", token)
-			setCSRFCookie(w, token)
+			c.SetCSRFCookie(w, token)
 
 			tmpl, err := template.ParseFiles("templates/login.html")
 			if err != nil {
@@ -539,7 +485,8 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := generateCSRFToken()
+	c := NewGopherCSRF()
+	token, err := c.GenerateCSRFToken()
 	if err != nil {
 		log.Println("CSRF token generation error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -547,11 +494,11 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("created CSRF token: ", token)
-	setCSRFCookie(w, token)
+	c.SetCSRFCookie(w, token)
 
 	data := PageData{
 		LoggedIn:      true,
-		Username:      claims.Username,
+		Username:      claims["Username"].(string),
 		Token:         token,
 		Navigation:    getNavigation(false),
 		RecentGophers: []string{"1", "2", "3"}, // Simulated results
@@ -577,7 +524,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, ok := claims.Permissions["documents"]
+	v, ok := claims["Permissions"].(map[string]interface{})["documents"]
 	if ok != true {
 		log.Println("error accessing claim permissions")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -590,7 +537,8 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := generateCSRFToken()
+	c := NewGopherCSRF()
+	token, err := c.GenerateCSRFToken()
 	if err != nil {
 		log.Println("CSRF token generation error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -598,9 +546,9 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("created CSRF token: ", token)
-	setCSRFCookie(w, token)
+	c.SetCSRFCookie(w, token)
 
-	gopherDemographics, err := getGopherDemographics(claims.GopherId)
+	gopherDemographics, err := getGopherDemographics(claims["GopherId"].(string))
 	if err != nil {
 		log.Println("get gopher demographics error:", err)
 		http.Error(w, "get gopher demographics error", http.StatusInternalServerError)
@@ -609,7 +557,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 
 	data := PageData{
 		LoggedIn:           true,
-		Username:           claims.Username,
+		Username:           claims["Username"].(string),
 		Token:              token,
 		Navigation:         getNavigation(true),
 		GopherDemographics: gopherDemographics,
@@ -636,7 +584,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, ok := claims.Permissions["results"]
+	v, ok := claims["Permissions"].(map[string]interface{})["results"]
 	if ok != true {
 		log.Println("error accessing claim permissions")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -649,7 +597,8 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := generateCSRFToken()
+	c := NewGopherCSRF()
+	token, err := c.GenerateCSRFToken()
 	if err != nil {
 		log.Println("CSRF token generation error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -657,9 +606,9 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("created CSRF token: ", token)
-	setCSRFCookie(w, token)
+	c.SetCSRFCookie(w, token)
 
-	gopherDemographics, err := getGopherDemographics(claims.GopherId)
+	gopherDemographics, err := getGopherDemographics(claims["GopherId"].(string))
 	if err != nil {
 		log.Println("get gopher demographics error:", err)
 		http.Error(w, "get gopher demographics error", http.StatusInternalServerError)
@@ -668,7 +617,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 
 	data := PageData{
 		LoggedIn:           true,
-		Username:           claims.Username,
+		Username:           claims["Username"].(string),
 		Token:              token,
 		Navigation:         getNavigation(true),
 		GopherDemographics: gopherDemographics,
@@ -697,7 +646,8 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		v, ok := claims.Permissions["quicksearch"]
+		//v, ok := claims.Permissions["quicksearch"]
+		v, ok := claims["Permissions"].(map[string]interface{})["quicksearch"]
 		if ok != true {
 			log.Println("error accessing claim permissions")
 			http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -718,7 +668,8 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		query := r.FormValue("query")
-		querySanitized := sanitizeUserInput(query)
+		s := NewGopherSanitize()
+		querySanitized := s.SanitizeUserInput(query)
 		gopherId := querySanitized
 
 		//searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
@@ -730,7 +681,13 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		tokenString, err := createTokenWithGopherId(claims.Username, claims.Permissions, gopherId)
+		permissions := claims["Permissions"].(map[string]interface{})
+		var newPermissions = make(map[string]bool)
+		for key, val := range permissions {
+			newPermissions[key] = val.(bool)
+		}
+		
+		tokenString, err := createTokenWithGopherId(claims["Username"].(string), newPermissions, gopherId)
 		if err != nil {
 			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 			return
@@ -747,7 +704,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 		data := PageData{
 			LoggedIn:           true,
-			Username:           claims.Username,
+			Username:           claims["Username"].(string),
 			Navigation:         getNavigation(true),
 			GopherDemographics: gopherDemographics,
 			RecentGophers:      []string{},
