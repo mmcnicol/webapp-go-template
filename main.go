@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ type Claims struct {
 	Username string `json:"Username"`
 	jwt.RegisteredClaims
 }
+
+type Middleware func(http.HandlerFunc) http.HandlerFunc
 
 type Navigation struct {
 	Page     string
@@ -56,13 +59,80 @@ func main() {
 	fmt.Println("Generated Secret Key:", secret)
 	jwtKey = []byte(secret)
 
-	http.HandleFunc("/", handleLogin)
-	http.HandleFunc("/dashboard", handleDashboard)
-	http.HandleFunc("GET /documents", handleDocuments)
-	http.HandleFunc("GET /results", handleResults)
-	http.HandleFunc("POST /search", handleSearch)
+	http.HandleFunc("GET /", handleLogin)
+	http.HandleFunc("POST /", Chain(handleLogin, CSRF()))
+	http.HandleFunc("GET /dashboard", Chain(handleDashboard, JWT()))
+	http.HandleFunc("GET /documents", Chain(handleDocuments, JWT()))
+	http.HandleFunc("GET /results", Chain(handleResults, JWT()))
+	http.HandleFunc("POST /search", Chain(handleSearch, JWT(), CSRF()))
 	fmt.Println("Server listening on :8080")
 	http.ListenAndServe(":8080", nil)
+}
+
+func JWT() Middleware {
+
+	return func(f http.HandlerFunc) http.HandlerFunc {
+
+		return func(w http.ResponseWriter, r *http.Request) {
+        
+			//claims, err := verifyToken(r)
+			_, err := verifyToken(r)
+			if err != nil {
+				log.Println("JWT middleware - token verification failed")
+				http.Redirect(w, r, "/", http.StatusUnauthorized)
+				return
+			}
+			
+			log.Println("JWT middleware - token verified")
+
+			// Call the next middleware/handler in chain
+			f(w, r)
+		}
+	}
+}
+
+func CSRF() Middleware {
+
+   	return func(f http.HandlerFunc) http.HandlerFunc {
+
+		return func(w http.ResponseWriter, r *http.Request) {
+		
+			err := r.ParseForm()
+			if err != nil {
+				fmt.Println("error parsing form:", err)
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			csrfToken := r.FormValue("csrf_token")
+			log.Println("CSRF middleware - form CSRF token: ", csrfToken)
+			
+			cookieToken, err := getCSRFCookie(r)
+			if err != nil {
+				fmt.Println("error reading CSRF token from cookie:", err)
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			
+			log.Println("CSRF middleware - cookie CSRF token: ", cookieToken)
+			if cookieToken != csrfToken {
+				fmt.Println("CSRF token mismatch")
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			// Call the next middleware/handler in chain
+			f(w, r)
+		}
+	}
+}
+
+// Chain applies middlewares to a http.HandlerFunc
+func Chain(f http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
+    for _, m := range middlewares {
+        f = m(f)
+    }
+    return f
 }
 
 func generateCSRFToken() (string, error) {
@@ -182,23 +252,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseForm()
 		if err != nil {
 			fmt.Println("error parsing form:", err)
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-
-		csrfToken := r.FormValue("csrf_token")
-		fmt.Println("POST - form CSRF token: ", csrfToken)
-
-		cookieToken, err := getCSRFCookie(r)
-		if err != nil {
-			fmt.Println("error reading CSRF token from cookie:", err)
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		
-		fmt.Println("POST - cookie CSRF token: ", cookieToken)
-		if cookieToken != csrfToken {
-			fmt.Println("CSRF token mismatch")
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
@@ -373,7 +426,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-
+	
 	token, err := generateCSRFToken()
 	if err != nil {
 		fmt.Println("CSRF token generation error:", err)
@@ -418,7 +471,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-
+	
 	token, err := generateCSRFToken()
 	if err != nil {
 		fmt.Println("CSRF token generation error:", err)
@@ -464,7 +517,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-
+	
 	token, err := generateCSRFToken()
 	if err != nil {
 		fmt.Println("CSRF token generation error:", err)
@@ -504,35 +557,18 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("in handleSearch()")
-	
-	claims, err := verifyToken(r)
-	if err != nil {
-		http.Redirect(w, r, "/", http.StatusUnauthorized)
-		return
-	}
 
 	if r.Method == http.MethodPost {
 
-		err := r.ParseForm()
+		claims, err := verifyToken(r)
+		if err != nil {
+			http.Redirect(w, r, "/", http.StatusUnauthorized)
+			return
+		}
+		
+		err = r.ParseForm()
 		if err != nil {
 			fmt.Println("error parsing form:", err)
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-
-		csrfToken := r.FormValue("csrf_token")
-		fmt.Println("POST - form CSRF token: ", csrfToken)
-		
-		cookieToken, err := getCSRFCookie(r)
-		if err != nil {
-			fmt.Println("error reading CSRF token from cookie:", err)
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			return
-		}
-		
-		fmt.Println("POST - cookie CSRF token: ", cookieToken)
-		if cookieToken != csrfToken {
-			fmt.Println("CSRF token mismatch")
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
