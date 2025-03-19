@@ -18,9 +18,9 @@ import (
 var jwtKey = []byte{}
 
 type Claims struct {
-	Username string `json:"Username"`
+	Username    string          `json:"Username"`
 	Permissions map[string]bool `json:"Permissions"`
-	GopherId string `json:"GopherId"`
+	GopherId    string          `json:"GopherId"`
 	jwt.RegisteredClaims
 }
 
@@ -86,7 +86,7 @@ func JWT() Middleware {
 	return func(f http.HandlerFunc) http.HandlerFunc {
 
 		return func(w http.ResponseWriter, r *http.Request) {
-        
+
 			//claims, err := verifyToken(r)
 			_, err := verifyToken(r)
 			if err != nil {
@@ -94,7 +94,7 @@ func JWT() Middleware {
 				http.Redirect(w, r, "/", http.StatusUnauthorized)
 				return
 			}
-			
+
 			log.Println("JWT middleware - token verified")
 
 			// Call the next middleware/handler in chain
@@ -105,10 +105,10 @@ func JWT() Middleware {
 
 func CSRF() Middleware {
 
-   	return func(f http.HandlerFunc) http.HandlerFunc {
+	return func(f http.HandlerFunc) http.HandlerFunc {
 
 		return func(w http.ResponseWriter, r *http.Request) {
-		
+
 			err := r.ParseForm()
 			if err != nil {
 				fmt.Println("error parsing form:", err)
@@ -118,14 +118,14 @@ func CSRF() Middleware {
 
 			csrfToken := r.FormValue("csrf_token")
 			log.Println("CSRF middleware - form CSRF token: ", csrfToken)
-			
+
 			cookieToken, err := getCSRFCookie(r)
 			if err != nil {
 				fmt.Println("error reading CSRF token from cookie:", err)
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			
+
 			log.Println("CSRF middleware - cookie CSRF token: ", cookieToken)
 			if cookieToken != csrfToken {
 				fmt.Println("CSRF token mismatch")
@@ -141,10 +141,10 @@ func CSRF() Middleware {
 
 // Chain applies middlewares to a http.HandlerFunc
 func Chain(f http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
-    for _, m := range middlewares {
-        f = m(f)
-    }
-    return f
+	for _, m := range middlewares {
+		f = m(f)
+	}
+	return f
 }
 
 func generateCSRFToken() (string, error) {
@@ -160,10 +160,10 @@ func generateCSRFToken() (string, error) {
 
 func setCSRFCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "csrf_token",
-		Value: token,
+		Name:     "csrf_token",
+		Value:    token,
 		HttpOnly: true,
-		Secure: false, // Set to true in production with HTTPS
+		Secure:   false, // Set to true in production with HTTPS
 		SameSite: http.SameSiteStrictMode,
 	})
 }
@@ -187,11 +187,11 @@ func generateRandomSecret(length int) (string, error) {
 }
 
 func createToken(username string, permissions map[string]bool) (string, error) {
-	
+
 	// Create JWT claims
 	expirationTime := time.Now().Add(5 * time.Minute)
 	claims := &Claims{
-		Username: username,
+		Username:    username,
 		Permissions: permissions,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
@@ -207,18 +207,18 @@ func createToken(username string, permissions map[string]bool) (string, error) {
 		//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return "", err
 	}
-	
+
 	return tokenString, nil
 }
 
 func createTokenWithGopherId(username string, permissions map[string]bool, gopherId string) (string, error) {
-	
+
 	// Create JWT claims
 	expirationTime := time.Now().Add(5 * time.Minute)
 	claims := &Claims{
-		Username: username,
+		Username:    username,
 		Permissions: permissions,
-		GopherId: gopherId,
+		GopherId:    gopherId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
@@ -233,7 +233,7 @@ func createTokenWithGopherId(username string, permissions map[string]bool, gophe
 		//http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return "", err
 	}
-	
+
 	return tokenString, nil
 }
 
@@ -288,7 +288,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Println("GET - created CSRF token: ", token)
 		setCSRFCookie(w, token)
-		
+
 		tmpl, err := template.ParseFiles("templates/login.html")
 		if err != nil {
 			fmt.Println("template parsing error:", err)
@@ -297,7 +297,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := LoginPageData{ // Initial empty form
-			Token:      token,
+			Token: token,
 		}
 
 		err = tmpl.Execute(w, data)
@@ -334,7 +334,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
-	
+
 			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
 
@@ -368,7 +368,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
-	
+
 			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
 
@@ -400,7 +400,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			permissions["quicksearch"] = true
 			permissions["documents"] = true
 			permissions["results"] = true
-			
+
 			tokenString, err := createToken(usernameSanitized, permissions)
 			if err != nil {
 				http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -427,10 +427,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
-	
+
 			fmt.Println("created CSRF token: ", token)
 			setCSRFCookie(w, token)
-	
+
 			tmpl, err := template.ParseFiles("templates/login.html")
 			if err != nil {
 				fmt.Println("template parsing error:", err)
@@ -483,7 +483,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-	
+
 	token, err := generateCSRFToken()
 	if err != nil {
 		fmt.Println("CSRF token generation error:", err)
@@ -503,16 +503,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Documents:     []string{},
 		LabResults:    []string{},
 	}
-	
-	/*
-	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
-	if err != nil {
-		fmt.Println("template parsing error:", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	*/
-	
+
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		fmt.Println("template execution error:", err)
@@ -537,7 +528,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-	
+
 	if v != true {
 		fmt.Println("claim permission is not true")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -564,16 +555,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		Documents:     []string{"Document 1", "Document 2", "Document 3"},
 		LabResults:    []string{},
 	}
-	
-	/*
-	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
-	if err != nil {
-		fmt.Println("template parsing error:", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	*/
-	
+
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
 		fmt.Println("template execution error:", err)
@@ -598,7 +580,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-	
+
 	if v != true {
 		fmt.Println("claim permission is not true")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
@@ -625,15 +607,6 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		Documents:     []string{},
 		LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 	}
-	
-	/*
-	tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
-	if err != nil {
-		fmt.Println("template parsing error:", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	*/
 
 	err = tmpl.ExecuteTemplate(w, "base.html", data)
 	if err != nil {
@@ -654,20 +627,20 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/", http.StatusUnauthorized)
 			return
 		}
-		
+
 		v, ok := claims.Permissions["quicksearch"]
 		if ok != true {
 			fmt.Println("error accessing claim permissions")
 			http.Redirect(w, r, "/", http.StatusUnauthorized)
 			return
 		}
-		
+
 		if v != true {
 			fmt.Println("claim permission is not true")
 			http.Redirect(w, r, "/", http.StatusUnauthorized)
 			return
 		}
-		
+
 		err = r.ParseForm()
 		if err != nil {
 			fmt.Println("error parsing form:", err)
@@ -677,7 +650,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 		query := r.FormValue("query")
 		querySanitized := sanitizeUserInput(query)
-		
+
 		//searchResults := []string{"Gopher A", "Gopher B", "Gopher C"} // Simulated results
 
 		tokenString, err := createTokenWithGopherId(claims.Username, claims.Permissions, querySanitized)
@@ -694,7 +667,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			Expires:  expirationTime,
 			HttpOnly: true, // Important for security
 		})
-		
+
 		data := PageData{
 			LoggedIn:      true,
 			Username:      claims.Username,
@@ -704,15 +677,6 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			Documents:     []string{},
 			LabResults:    []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 		}
-		
-		/*
-		tmpl, err := template.ParseFiles("dashboard.html", "base.html", "nav.html", "banner.html", "system_name.html", "quick_search.html", "logout.html", "gopher_banner.html", "recent_gophers.html", "documents.html", "lab_results.html")
-		if err != nil {
-			fmt.Println("template parsing error:", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		*/
 
 		err = tmpl.ExecuteTemplate(w, "base.html", data)
 		if err != nil {
@@ -724,4 +688,3 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/dashboard", http.StatusFound)
 }
-
