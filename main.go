@@ -328,7 +328,7 @@ func handleRecentGophers(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
-	
+
 	// Do permission check
 	if !hasPermission("recent-gophers", claims["Permissions"].(string)) {
 		log.Println("insufficient claim permissions")
@@ -347,7 +347,7 @@ func handleRecentGophers(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("created CSRF token: ", token)
 	c.SetCSRFCookie(w, token)
-	
+
 	// Fetch data
 	recentGophers, err := getRecentGophers(claims["Username"].(string))
 	if err != nil {
@@ -358,14 +358,14 @@ func handleRecentGophers(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare page data struct
 	data := PageData{
-		LoggedIn:      true,
-		Username:      claims["Username"].(string),
-		Token:         token,
-		Navigation:    getNavigation(false),
+		LoggedIn:         true,
+		Username:         claims["Username"].(string),
+		Token:            token,
+		Navigation:       getNavigation(false),
 		HasRecentGophers: true,
-		RecentGophers: recentGophers,
-		Documents:     []string{},
-		LabResults:    []string{},
+		RecentGophers:    recentGophers,
+		Documents:        []string{},
+		LabResults:       []string{},
 	}
 
 	// Write page
@@ -520,7 +520,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleSearch()")
-	
+
 	if r.Method == http.MethodPost {
 
 		// Get JWT cookie

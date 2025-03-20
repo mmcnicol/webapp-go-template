@@ -63,4 +63,5 @@ https://developer.hashicorp.com/nomad/tutorials/templates/go-template-syntax
 
 https://go.dev/blog/routing-enhancements
 
+https://stackoverflow.com/questions/17284222/in-go-templates-accessing-parent-global-pipeline-within-range
 
