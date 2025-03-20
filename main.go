@@ -20,6 +20,10 @@ var jwtKey = []byte{}
 
 var tmpl *template.Template
 
+type RecentGophers struct {
+	GopherDemographics []GopherDemographics
+}
+
 type GopherDemographics struct {
 	GopherId    string
 	Name        string
@@ -38,7 +42,8 @@ type PageData struct {
 	GopherDemographics GopherDemographics
 	Navigation         []Navigation
 	SearchResults      []string
-	RecentGophers      []string
+	HasRecentGophers   bool
+	RecentGophers      RecentGophers
 	Documents          []string
 	LabResults         []string
 }
@@ -86,7 +91,7 @@ func main() {
 
 	http.HandleFunc("GET /", handleLogin)
 	http.HandleFunc("POST /", m.Chain(handleLogin, m.CSRF()))
-	http.HandleFunc("GET /dashboard", m.Chain(handleDashboard, m.JWT()))
+	http.HandleFunc("GET /recent-gophers", m.Chain(handleRecentGophers, m.JWT()))
 	http.HandleFunc("GET /documents", m.Chain(handleDocuments, m.JWT()))
 	http.HandleFunc("GET /results", m.Chain(handleResults, m.JWT()))
 	http.HandleFunc("POST /search", m.Chain(handleSearch, m.JWT(), m.CSRF()))
@@ -226,7 +231,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		if usernameSanitized == "user" && passwordSanitized == "pass" {
 
-			permissionsArray := []string{"quicksearch", "documents", "results"}
+			permissionsArray := []string{"quicksearch", "recent-gophers", "documents", "results"}
 			permissions := strings.Join(permissionsArray, ",")
 
 			// Create JWT claims
@@ -255,7 +260,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				Expires:  expirationTime,
 				HttpOnly: true, // Important for security
 			})
-			http.Redirect(w, r, "/dashboard", http.StatusFound)
+			http.Redirect(w, r, "/recent-gophers", http.StatusFound)
 			return
 
 		} else {
@@ -301,11 +306,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 }
 
-func handleDashboard(w http.ResponseWriter, r *http.Request) {
+func handleRecentGophers(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("in handleDashboard()")
+	log.Println("in handleRecentGophers()")
 
-	// Get JWT Claims
+	// Get JWT cookie
 	cookie, err := r.Cookie("token")
 	if err != nil {
 		log.Println("error accessing token cookie:", err)
@@ -315,10 +320,18 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	tokenString := cookie.Value
 
+	// Get JWT Claims
 	j := NewGopherJWT()
 	claims, err := j.GetClaims(tokenString)
 	if err != nil {
 		log.Println("GetClaims error:", err)
+		http.Redirect(w, r, "/", http.StatusUnauthorized)
+		return
+	}
+	
+	// Do permission check
+	if !hasPermission("recent-gophers", claims["Permissions"].(string)) {
+		log.Println("insufficient claim permissions")
 		http.Redirect(w, r, "/", http.StatusUnauthorized)
 		return
 	}
@@ -334,6 +347,14 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("created CSRF token: ", token)
 	c.SetCSRFCookie(w, token)
+	
+	// Fetch data
+	recentGophers, err := getRecentGophers(claims["Username"].(string))
+	if err != nil {
+		log.Println("get recent gophers error:", err)
+		http.Error(w, "get recent gophers error", http.StatusInternalServerError)
+		return
+	}
 
 	// Prepare page data struct
 	data := PageData{
@@ -341,7 +362,8 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Username:      claims["Username"].(string),
 		Token:         token,
 		Navigation:    getNavigation(false),
-		RecentGophers: []string{"1", "2", "3"}, // Simulated results
+		HasRecentGophers: true,
+		RecentGophers: recentGophers,
 		Documents:     []string{},
 		LabResults:    []string{},
 	}
@@ -359,7 +381,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleDocuments()")
 
-	// Get JWT Claims
+	// Get JWT cookie
 	cookie, err := r.Cookie("token")
 	if err != nil {
 		log.Println("error accessing token cookie:", err)
@@ -369,6 +391,7 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 
 	tokenString := cookie.Value
 
+	// Get JWT Claims
 	j := NewGopherJWT()
 	claims, err := j.GetClaims(tokenString)
 	if err != nil {
@@ -411,7 +434,6 @@ func handleDocuments(w http.ResponseWriter, r *http.Request) {
 		Token:              token,
 		Navigation:         getNavigation(true),
 		GopherDemographics: gopherDemographics,
-		RecentGophers:      []string{},
 		Documents:          []string{"Document 1", "Document 2", "Document 3"},
 		LabResults:         []string{},
 	}
@@ -429,7 +451,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleResults()")
 
-	// Get JWT Claims
+	// Get JWT cookie
 	cookie, err := r.Cookie("token")
 	if err != nil {
 		log.Println("error accessing token cookie:", err)
@@ -439,6 +461,7 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 
 	tokenString := cookie.Value
 
+	// Get JWT Claims
 	j := NewGopherJWT()
 	claims, err := j.GetClaims(tokenString)
 	if err != nil {
@@ -481,7 +504,6 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 		Token:              token,
 		Navigation:         getNavigation(true),
 		GopherDemographics: gopherDemographics,
-		RecentGophers:      []string{},
 		Documents:          []string{},
 		LabResults:         []string{"Lab Result 1", "Lab Result 2", "Lab Result 3"},
 	}
@@ -498,10 +520,10 @@ func handleResults(w http.ResponseWriter, r *http.Request) {
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("in handleSearch()")
-
+	
 	if r.Method == http.MethodPost {
 
-		// Get JWT Claims
+		// Get JWT cookie
 		cookie, err := r.Cookie("token")
 		if err != nil {
 			log.Println("error accessing token cookie:", err)
@@ -511,6 +533,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 
 		tokenString := cookie.Value
 
+		// Get JWT Claims
 		j := NewGopherJWT()
 		claims, err := j.GetClaims(tokenString)
 		if err != nil {
@@ -591,18 +614,44 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 func getNavigation(gopherContext bool) []Navigation {
 	if gopherContext {
 		return []Navigation{
-			{Page: "Home", Endpoint: "/"},
+			{Page: "Recent Gophers", Endpoint: "/recent-gophers"},
 			{Page: "Documents", Endpoint: "/documents"},
 			{Page: "Results", Endpoint: "/results"},
 		}
 	} else {
 		return []Navigation{
-			{Page: "Home", Endpoint: "/"},
+			{Page: "Recent Gophers", Endpoint: "/recent-gophers"},
 		}
 	}
 }
 
+func getRecentGophers(username string) (RecentGophers, error) {
+
+	// Simulated results
+	return RecentGophers{
+		[]GopherDemographics{
+			{
+				GopherId:    "1",
+				Name:        "Gopher A",
+				DateOfBirth: time.Date(1999, 1, 2, 0, 0, 0, 0, time.Local),
+			},
+			{
+				GopherId:    "2",
+				Name:        "Gopher B",
+				DateOfBirth: time.Date(2000, 2, 3, 0, 0, 0, 0, time.Local),
+			},
+			{
+				GopherId:    "3",
+				Name:        "Gopher C",
+				DateOfBirth: time.Date(2001, 3, 4, 0, 0, 0, 0, time.Local),
+			},
+		},
+	}, nil
+}
+
 func getGopherDemographics(gopherId string) (GopherDemographics, error) {
+
+	// Simulated results
 	switch gopherId {
 	case "1":
 		return GopherDemographics{

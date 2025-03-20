@@ -6,8 +6,11 @@
         .container { display: flex; }
         .nav { width: 200px; background-color: #f0f0f0; padding: 10px; }
         .content { flex-grow: 1; padding: 20px; }
-        .banner { background-color: lightblue; padding: 10px; display: flex; justify-content: space-between;}
-        .gopher-banner {background-color: lightyellow; padding: 5px;}
+        .banner { background-color: lightblue; padding: 10px; display: flex; justify-content: space-between; }
+        .gopher-banner { background-color: lightyellow; padding: 5px; }
+        
+        th { text-align: left; padding: 2px; background-color: lightblue; }
+        td { padding: 2px; }
     </style>
 </head>
 <body>
@@ -18,6 +21,40 @@
             {{template "content" .}}
         </div>
     </div>
+    
+    
+<script>
+/**
+ * sends a request to the specified url from a form. this will change the window location.
+ * @param {string} path the path to send the post request to
+ * @param {object} params the parameters to add to the url
+ * @param {string} [method=post] the method to use on the form
+ */
+
+function post(path, params, method='post') {
+
+  // The rest of this code assumes you are not using a library.
+  // It can be made less verbose if you use one.
+  const form = document.createElement('form');
+  form.method = method;
+  form.action = path;
+
+  for (const key in params) {
+    if (params.hasOwnProperty(key)) {
+      const hiddenField = document.createElement('input');
+      hiddenField.type = 'hidden';
+      hiddenField.name = key;
+      hiddenField.value = params[key];
+
+      form.appendChild(hiddenField);
+    }
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+}
+</script>
+
 </body>
 </html>
 

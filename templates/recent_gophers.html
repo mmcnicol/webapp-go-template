@@ -1,9 +1,20 @@
 {{define "recent_gophers"}}
 <h2>Recent Gophers</h2>
-<ul>
-    {{range .RecentGophers}}
-    <li>{{.}}</li>
+<table>
+  <thead>
+    <th>Id</th>
+    <th style="width: 200px;">Name</th>
+    <th>Date of Birth</th>
+  </thead>
+  <tbody>
+    {{range .RecentGophers.GopherDemographics}}
+    <tr onclick="post('/search', { csrf_token: '{{ $.Token }}', query: '{{.GopherId}}' });">
+      <td>{{.GopherId}}</td>
+      <td>{{.Name}}</td>
+      <td>{{.DateOfBirth.Format "02/01/2006"}}</td>
+    </tr>
     {{end}}
-</ul>
+  </tbody>
+</table>
 {{end}}
 

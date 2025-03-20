@@ -2,7 +2,7 @@
   {{if .GopherDemographics.GopherId}}
     {{template "gopher_banner" .}}
   {{end}}
-  {{if .RecentGophers}}
+  {{if .HasRecentGophers }}
     {{template "recent_gophers" .}}
   {{end}}
   {{if .Documents}}
